@@ -6,7 +6,7 @@ from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout,
     QHBoxLayout, QLineEdit, QPushButton, QFileDialog,
     QTreeWidget, QTreeWidgetItem, QMessageBox, QLabel,
-    QScrollArea, QComboBox, QMenu, QInputDialog
+    QScrollArea, QComboBox, QMenu, QInputDialog, QTextEdit
 )
 from PyQt6.QtCore import QDir, Qt
 from pathlib import Path
@@ -76,21 +76,56 @@ class Code2PromptGUI(QMainWindow):
 
         main_layout.addLayout(title_layout)
 
+        # Horizontal layout for tree and details panel
+        content_layout = QHBoxLayout()
+        main_layout.addLayout(content_layout)
+
         # Tree widget setup
         self.tree_widget = QTreeWidget()
-        self.tree_widget.setHeaderLabels(["Name", "Type", "Comment"])
+        self.tree_widget.setHeaderLabels(["Name", "Type"])
         self.tree_widget.setColumnWidth(0, 400)
         self.tree_widget.setColumnWidth(1, 100)
-        self.tree_widget.setColumnWidth(2, 300)
+        # Remove the comment column from the tree view
+        # self.tree_widget.setColumnWidth(2, 300)
         self.tree_widget.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self.tree_widget.customContextMenuRequested.connect(self.open_context_menu)
+        # Remove context menu for editing comments
+        # self.tree_widget.customContextMenuRequested.connect(self.open_context_menu)
+
+        # Connect selection change signal to update details panel
+        self.tree_widget.itemSelectionChanged.connect(self.update_details_panel)
 
         # Scroll area for the tree
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setWidget(self.tree_widget)
+        tree_scroll_area = QScrollArea()
+        tree_scroll_area.setWidgetResizable(True)
+        tree_scroll_area.setWidget(self.tree_widget)
 
-        main_layout.addWidget(scroll_area)
+        content_layout.addWidget(tree_scroll_area)
+
+        # Details panel setup
+        self.details_panel = QWidget()
+        details_layout = QVBoxLayout()
+        self.details_panel.setLayout(details_layout)
+
+        # Label for file/directory name
+        self.name_label = QLabel("")
+        details_layout.addWidget(self.name_label)
+
+        # Comment editor
+        self.comment_edit = QTextEdit()
+        self.comment_edit.setFontFamily("monospace")
+        self.comment_edit.setPlaceholderText("Enter comment here...")
+        self.comment_edit.textChanged.connect(self.comment_text_changed)
+        details_layout.addWidget(self.comment_edit)
+
+        # Initially disable the details panel
+        self.details_panel.setEnabled(False)
+
+        # Scroll area for details panel
+        details_scroll_area = QScrollArea()
+        details_scroll_area.setWidgetResizable(True)
+        details_scroll_area.setWidget(self.details_panel)
+
+        content_layout.addWidget(details_scroll_area)
 
         # Status label and buttons at the bottom
         bottom_layout = QHBoxLayout()
@@ -175,7 +210,8 @@ class Code2PromptGUI(QMainWindow):
         self.path_input.clear()
 
         try:
-            root_item = QTreeWidgetItem([path.name, "Directory", ""])
+            root_item = QTreeWidgetItem([path.name, "Directory"])
+            root_item.comment = ""
             self.tree_widget.addTopLevelItem(root_item)
             self.populate_tree(root_item, path)
             root_item.setExpanded(True)
@@ -190,36 +226,22 @@ class Code2PromptGUI(QMainWindow):
         try:
             for item in sorted(path.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower())):
                 if item.is_dir():
-                    child_item = QTreeWidgetItem([item.name, "Directory", ""])
+                    child_item = QTreeWidgetItem([item.name, "Directory"])
+                    child_item.comment = ""
                     parent_item.addChild(child_item)
                     self.populate_tree(child_item, item)
                 else:
-                    child_item = QTreeWidgetItem([item.name, "File", ""])
+                    child_item = QTreeWidgetItem([item.name, "File"])
+                    child_item.comment = ""
                     parent_item.addChild(child_item)
         except PermissionError:
-            child_item = QTreeWidgetItem(["[Permission Denied]", "Directory", ""])
+            child_item = QTreeWidgetItem(["[Permission Denied]", "Directory"])
+            child_item.comment = ""
             parent_item.addChild(child_item)
         except Exception as e:
-            child_item = QTreeWidgetItem([f"[Error: {str(e)}]", "File", ""])
+            child_item = QTreeWidgetItem([f"[Error: {str(e)}]", "File"])
+            child_item.comment = ""
             parent_item.addChild(child_item)
-
-    def open_context_menu(self, position):
-        """Open a context menu to add/edit comments."""
-        selected_item = self.tree_widget.itemAt(position)
-        if selected_item:
-            menu = QMenu()
-            edit_comment_action = menu.addAction("Add/Edit Comment")
-            edit_comment_action.triggered.connect(lambda: self.edit_comment(selected_item))
-            menu.exec(self.tree_widget.viewport().mapToGlobal(position))
-
-    def edit_comment(self, item):
-        """Open a dialog to edit the comment of a tree item."""
-        current_comment = item.text(2)
-        text, ok = QInputDialog.getText(self, "Edit Comment", f"Enter comment for '{item.text(0)}':", text=current_comment)
-        if ok:
-            item.setText(2, text)
-            self.unsaved_changes = True
-            self.update_status_label()
 
     def enable_title_editing(self):
         """Enable the title input field for editing."""
@@ -373,7 +395,7 @@ class Code2PromptGUI(QMainWindow):
         node = {
             "name": item.text(0),
             "type": item.text(1).lower(),
-            "comment": item.text(2),
+            "comment": getattr(item, 'comment', ''),
         }
         if item.childCount() > 0:
             node["contents"] = []
@@ -427,7 +449,8 @@ class Code2PromptGUI(QMainWindow):
         self.tree_widget.clear()
         try:
             root_json = tree['root']
-            root_item = QTreeWidgetItem([root_json['name'], root_json['type'].capitalize(), root_json.get('comment', '')])
+            root_item = QTreeWidgetItem([root_json['name'], root_json['type'].capitalize()])
+            root_item.comment = root_json.get('comment', '')
             self.tree_widget.addTopLevelItem(root_item)
             self.populate_tree_from_json(root_item, root_json)
             root_item.setExpanded(True)
@@ -443,7 +466,8 @@ class Code2PromptGUI(QMainWindow):
             name = child.get('name', '')
             type_ = child.get('type', '').capitalize()
             comment = child.get('comment', '')
-            child_item = QTreeWidgetItem([name, type_, comment])
+            child_item = QTreeWidgetItem([name, type_])
+            child_item.comment = comment
             parent_item.addChild(child_item)
             if type_.lower() == "directory":
                 self.populate_tree_from_json(child_item, child)
@@ -469,6 +493,9 @@ class Code2PromptGUI(QMainWindow):
         self.path_input.clear()
         self.load_combo.setCurrentIndex(0)
         self.update_status_label()
+        self.details_panel.setEnabled(False)
+        self.name_label.setText("")
+        self.comment_edit.clear()
 
     def close_tree(self):
         """Close the current tree."""
@@ -499,6 +526,33 @@ class Code2PromptGUI(QMainWindow):
                 return
 
         event.accept()
+
+    def update_details_panel(self):
+        """Update the details panel when a tree item is selected."""
+        selected_items = self.tree_widget.selectedItems()
+        if selected_items:
+            item = selected_items[0]
+            item_type = item.text(1)
+            name = item.text(0)
+            comment = getattr(item, 'comment', '')
+
+            self.name_label.setText(f"{item_type} Name: {name}")
+            self.comment_edit.setPlainText(comment)
+            self.details_panel.setEnabled(True)
+        else:
+            # No item selected
+            self.details_panel.setEnabled(False)
+            self.name_label.setText("")
+            self.comment_edit.clear()
+
+    def comment_text_changed(self):
+        """Update the comment of the selected item when the text changes."""
+        selected_items = self.tree_widget.selectedItems()
+        if selected_items:
+            item = selected_items[0]
+            item.comment = self.comment_edit.toPlainText()
+            self.unsaved_changes = True
+            self.update_status_label()
 
 
 if __name__ == "__main__":
