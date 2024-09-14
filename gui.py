@@ -92,13 +92,26 @@ class Code2PromptGUI(QMainWindow):
 
         main_layout.addWidget(scroll_area)
 
+        # Status label and buttons at the bottom
+        bottom_layout = QHBoxLayout()
+
+        # Status label to show saved/unsaved changes
+        self.status_label = QLabel("No changes")
+        bottom_layout.addWidget(self.status_label)
+
+        bottom_layout.addStretch()
+
+        # Close Tree button
+        self.close_button = QPushButton("Close Tree")
+        self.close_button.clicked.connect(self.close_tree)
+        bottom_layout.addWidget(self.close_button)
+
         # Save button
-        save_layout = QHBoxLayout()
         self.save_button = QPushButton("Save Tree")
         self.save_button.clicked.connect(self.save_tree)
-        save_layout.addStretch()
-        save_layout.addWidget(self.save_button)
-        main_layout.addLayout(save_layout)
+        bottom_layout.addWidget(self.save_button)
+
+        main_layout.addLayout(bottom_layout)
 
     def make_safe_filename(self, s):
         """Convert a string into a filename-safe string."""
@@ -157,15 +170,7 @@ class Code2PromptGUI(QMainWindow):
             QMessageBox.warning(self, "Invalid Directory", "The selected directory does not exist or is not a directory.")
             return
 
-        self.tree_widget.clear()
-        self.current_tree_title = None
-        self.unsaved_changes = False
-        self.title_input.setText("")
-        self.title_input.setEnabled(False)
-        self.title_input.setReadOnly(True)
-        self.edit_title_button.setEnabled(True)
-        self.edit_title_button.setEnabled(False)
-        self.cancel_edit_button.setVisible(False)
+        self.clear_tree_data()
         self.directory_label.setText(f"Directory Path: {path_str}")
         self.path_input.clear()
 
@@ -176,6 +181,7 @@ class Code2PromptGUI(QMainWindow):
             root_item.setExpanded(True)
             self.unsaved_changes = True  # New tree loaded, changes unsaved
             self.edit_title_button.setEnabled(True)
+            self.update_status_label()
         except Exception as e:
             QMessageBox.critical(self, "Error", f"An error occurred while loading the directory:\n{str(e)}")
 
@@ -213,6 +219,7 @@ class Code2PromptGUI(QMainWindow):
         if ok:
             item.setText(2, text)
             self.unsaved_changes = True
+            self.update_status_label()
 
     def enable_title_editing(self):
         """Enable the title input field for editing."""
@@ -222,6 +229,7 @@ class Code2PromptGUI(QMainWindow):
         self.edit_title_button.setEnabled(False)
         self.cancel_edit_button.setVisible(True)
         self.unsaved_changes = True
+        self.update_status_label()
 
     def cancel_title_editing(self):
         """Cancel the title editing."""
@@ -233,6 +241,8 @@ class Code2PromptGUI(QMainWindow):
         self.title_input.setReadOnly(True)
         self.edit_title_button.setEnabled(True)
         self.cancel_edit_button.setVisible(False)
+        self.unsaved_changes = False
+        self.update_status_label()
 
     def save_tree(self):
         """Save the current tree to its own JSON file."""
@@ -329,6 +339,7 @@ class Code2PromptGUI(QMainWindow):
         self.edit_title_button.setEnabled(True)
         self.cancel_edit_button.setVisible(False)
         self.unsaved_changes = False
+        self.update_status_label()
 
         QMessageBox.information(self, "Tree Saved", f"Tree '{title}' has been saved successfully.")
 
@@ -401,6 +412,8 @@ class Code2PromptGUI(QMainWindow):
             QMessageBox.critical(self, "Error", f"Failed to load tree '{title}':\n{str(e)}")
             return
 
+        self.clear_tree_data()
+
         # Update the GUI
         self.current_tree_title = title
         self.title_input.setText(title)
@@ -419,6 +432,7 @@ class Code2PromptGUI(QMainWindow):
             self.populate_tree_from_json(root_item, root_json)
             root_item.setExpanded(True)
             self.unsaved_changes = False
+            self.update_status_label()
         except Exception as e:
             QMessageBox.critical(self, "Error", f"An error occurred while loading the tree:\n{str(e)}")
 
@@ -433,6 +447,42 @@ class Code2PromptGUI(QMainWindow):
             parent_item.addChild(child_item)
             if type_.lower() == "directory":
                 self.populate_tree_from_json(child_item, child)
+
+    def update_status_label(self):
+        """Update the status label to reflect saved/unsaved changes."""
+        if self.unsaved_changes:
+            self.status_label.setText("Unsaved changes")
+        else:
+            self.status_label.setText("All changes saved")
+
+    def clear_tree_data(self):
+        """Clear all data related to the current tree."""
+        self.tree_widget.clear()
+        self.current_tree_title = None
+        self.unsaved_changes = False
+        self.title_input.setText("")
+        self.title_input.setEnabled(False)
+        self.title_input.setReadOnly(True)
+        self.edit_title_button.setEnabled(False)
+        self.cancel_edit_button.setVisible(False)
+        self.directory_label.setText("")
+        self.path_input.clear()
+        self.load_combo.setCurrentIndex(0)
+        self.update_status_label()
+
+    def close_tree(self):
+        """Close the current tree."""
+        if self.unsaved_changes:
+            proceed = QMessageBox.question(
+                self,
+                "Unsaved Changes",
+                "You have unsaved changes. Do you want to discard them and close the tree?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            )
+            if proceed != QMessageBox.StandardButton.Yes:
+                return
+
+        self.clear_tree_data()
 
     def closeEvent(self, event):
         """Handle actions on closing the application."""
