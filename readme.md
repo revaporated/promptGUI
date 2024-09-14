@@ -1,565 +1,385 @@
-promptUI readme:
+# promptUI: A GUI for creating and managing prompts
 
 ---
 
-## **Table of Contents**
+## Table of Contents
 
 1. [Introduction](#introduction)
 2. [Overall Architecture](#overall-architecture)
 3. [Key Features Breakdown](#key-features-breakdown)
-    - [1. JSON Data Management](#1-json-data-management)
-    - [2. User Interface Components](#2-user-interface-components)
-    - [3. Loading Directory Trees](#3-loading-directory-trees)
-    - [4. Adding and Editing Comments](#4-adding-and-editing-comments)
-    - [5. Saving Trees to JSON](#5-saving-trees-to-json)
-    - [6. Loading Existing Trees from JSON](#6-loading-existing-trees-from-json)
-    - [7. Error Handling and User Prompts](#7-error-handling-and-user-prompts)
-    - [8. Application Lifecycle Management](#8-application-lifecycle-management)
+    - [1. Modular Code Structure](#1-modular-code-structure)
+    - [2. JSON Data Management](#2-json-data-management)
+    - [3. User Interface Components](#3-user-interface-components)
+    - [4. Loading Directory Trees](#4-loading-directory-trees)
+    - [5. Adding and Editing Comments](#5-adding-and-editing-comments)
+    - [6. Command Builder Integration](#6-command-builder-integration)
+    - [7. Saving and Loading Trees](#7-saving-and-loading-trees)
+    - [8. Error Handling and User Prompts](#8-error-handling-and-user-prompts)
+    - [9. Application Lifecycle Management](#9-application-lifecycle-management)
 4. [Workflow Example](#workflow-example)
 5. [Future Enhancements](#future-enhancements)
 6. [Conclusion](#conclusion)
 
 ---
 
-## **Introduction**
+## Introduction
 
-The `gui.py` script is a PyQt6-based graphical user interface (GUI) application designed to visualize, annotate, save, and load directory structures. Users can select directories, view their hierarchical structure, add comments to files and folders, and manage multiple such trees with unique titles. All this information is persistently stored in a `trees.json` file, facilitating easy retrieval and management.
-
----
-
-## **Overall Architecture**
-
-The application is structured around the `Code2PromptGUI` class, which inherits from `QMainWindow`. This class initializes the GUI components, manages user interactions, handles JSON data storage, and ensures seamless loading and saving of directory trees. The core functionalities revolve around:
-
-- **GUI Layout:** Organized using `QVBoxLayout` and `QHBoxLayout` to arrange widgets logically.
-- **Tree Visualization:** Utilizes `QTreeWidget` to display directory structures.
-- **Data Persistence:** Employs JSON serialization to save and load trees, including their titles and comments.
-- **User Interaction:** Facilitates user inputs through dialogs, buttons, and context menus.
+**promptUI** is a PyQt6-based graphical user interface (GUI) application designed to visualize, annotate, and manage directory structures interactively. Users can select directories, view their hierarchical structures, add comments to files and folders, filter or exclude specific items, and dynamically build commands for the `code2prompt` tool based on their selections. The application supports saving and loading multiple annotated trees, facilitating efficient project management and documentation.
 
 ---
 
-## **Key Features Breakdown**
+## Overall Architecture
 
-Let's delve into each feature, explaining its purpose, implementation, and interaction with other components.
+The application is structured into modular components, each handling specific functionalities, promoting maintainability and scalability. The key modules are:
 
-### **1. JSON Data Management**
+- **`main.py`**: The entry point of the application.
+- **`main_window.py`**: Manages the main application window and integrates all components.
+- **`tree_view.py`**: Handles the directory tree visualization and user interactions with tree items.
+- **`tree_item.py`**: Defines a custom tree item class with additional attributes like comments and filter states.
+- **`details_panel.py`**: Provides an interface for viewing and editing comments on selected items.
+- **`command_builder.py`**: Dynamically constructs the `code2prompt` command based on user selections.
+- **`data_manager.py`**: Manages the saving and loading of tree data to and from JSON files.
+- **`utils.py`**: Contains utility functions used across the application.
 
-**Purpose:**  
-To persistently store multiple directory trees along with their titles and comments, enabling users to save their work and retrieve it later.
+The modular design allows for focused development on individual components and facilitates easier testing and maintenance.
 
-**Implementation:**
+---
 
-- **JSON Structure:**
-  
+## Key Features Breakdown
+
+### 1. Modular Code Structure
+
+**Purpose**:  
+To enhance maintainability, scalability, and readability by separating functionalities into distinct modules.
+
+**Implementation**:
+
+- **Module Separation**:
+  - **`main_window.py`**: Orchestrates the application flow and integrates all components.
+  - **`tree_view.py`**: Manages tree visualization and item interactions.
+  - **`details_panel.py`**: Handles the UI for item details and comments.
+  - **`command_builder.py`**: Builds the command string based on tree state.
+  - **`data_manager.py`**: Handles data persistence.
+  - **`tree_item.py`**: Defines the `TreeItem` class with additional attributes.
+  - **`utils.py`**: Provides helper functions like `make_safe_filename`.
+
+- **Benefits**:
+  - **Maintainability**: Easier to manage and update individual modules.
+  - **Collaboration**: Multiple developers can work on different modules simultaneously.
+  - **Reusability**: Modules can be reused in other projects or extended independently.
+
+### 2. JSON Data Management
+
+**Purpose**:  
+To persistently store individual directory trees with their annotations, filter states, and commands, enabling users to save and retrieve their work.
+
+**Implementation**:
+
+- **`DataManager` Class (`data_manager.py`)**:
+  - Manages saving and loading of tree data to individual JSON files within a `trees` directory.
+  - **Key Methods**:
+    - `save_tree`: Saves a tree's data to a JSON file.
+    - `load_trees_data`: Loads the list of saved trees.
+    - `rename_tree`: Renames an existing tree file.
+    - `delete_tree`: Deletes a tree file.
+
+- **JSON Structure**:
   ```json
   {
-    "trees": [
-      {
-        "title": "Sample Tree",
-        "path": "/path/to/directory",
-        "root": {
-          "name": "directory",
+    "title": "Project Tree",
+    "path": "/path/to/directory",
+    "root": {
+      "name": "directory",
+      "type": "directory",
+      "comment": "",
+      "filter_state": "none",
+      "path": "/path/to/directory",
+      "contents": [
+        {
+          "name": "src",
           "type": "directory",
           "comment": "",
-          "contents": [
-            {
-              "name": "subdir",
-              "type": "directory",
-              "comment": "A subdirectory",
-              "contents": [
-                {
-                  "name": "file.txt",
-                  "type": "file",
-                  "comment": "A sample file"
-                }
-              ]
-            },
-            {
-              "name": "file.md",
-              "type": "file",
-              "comment": "Documentation file"
-            }
-          ]
+          "filter_state": "filter",
+          "path": "/path/to/directory/src",
+          "contents": []
+        },
+        {
+          "name": "README.md",
+          "type": "file",
+          "comment": "Project documentation",
+          "filter_state": "none",
+          "path": "/path/to/directory/README.md"
         }
-      }
-      // ... additional trees
-    ]
+      ]
+    }
   }
   ```
 
-- **Key Methods:**
+**Interaction with Other Components**:  
+The `DataManager` interacts with `MainWindow` for loading and saving operations, ensuring that the application state is preserved between sessions.
 
-  - **`load_trees_data`:**  
-    - **Function:** Loads existing tree data from `trees.json`.
-    - **Process:**  
-      - Checks if `trees.json` exists.
-      - If it exists, attempts to parse the JSON content into `self.trees_data`.
-      - If parsing fails (e.g., due to corruption), initializes an empty structure and notifies the user.
-      - If the file doesn't exist, initializes `self.trees_data` with an empty `"trees"` array.
+### 3. User Interface Components
 
-  - **`save_trees_data`:**  
-    - **Function:** Writes the current `self.trees_data` back to `trees.json`.
-    - **Process:**  
-      - Serializes `self.trees_data` using `json.dump` with indentation for readability.
-      - Handles any exceptions during the write process, notifying the user if issues arise.
+**Purpose**:  
+To provide an intuitive and organized interface for users to interact with the application.
 
-**Interaction with Other Components:**  
-These methods are foundational, ensuring that all tree operations (load/save) interact seamlessly with the persistent storage.
+**Implementation**:
 
-### **2. User Interface Components**
-
-**Purpose:**  
-To provide an intuitive and organized layout for users to interact with the application, including selecting directories, viewing trees, adding comments, and managing saved trees.
-
-**Implementation:**
-
-- **Layout Structure:**
+- **Main Window (`main_window.py`)**:
+  - **Layout Structure**:
+    - **Top Section**: Load existing trees and load new directories.
+    - **Title Editing**: Tree title input and editing controls.
+    - **Content Area**: Split between the `TreeView` and `DetailsPanel`.
+    - **Command Builder**: Displays the dynamically built `code2prompt` command.
+    - **Bottom Section**: Status label and action buttons (Save, Close Tree).
   
-  - **Main Layout (`QVBoxLayout`):**  
-    Organizes all components vertically.
-  
-  - **Top Layout (`QHBoxLayout`):**  
-    Contains the tree title input and the dropdown to load existing trees.
-  
-  - **Path Selection Layout (`QHBoxLayout`):**  
-    Includes the directory path input, "Browse" button, and "Load Tree" button.
-  
-  - **Tree Widget (`QTreeWidget`):**  
-    Displays the hierarchical directory structure with columns for Name, Type, and Comment.
-  
-  - **Save Button Layout (`QHBoxLayout`):**  
-    Houses the "Save Tree" button, aligned to the right.
+- **Key Widgets**:
+  - **`QComboBox`**: For selecting existing trees.
+  - **`QLineEdit`**: For directory path input and tree title.
+  - **`QTreeWidget`**: Displays the directory tree.
+  - **`QTextEdit`**: For editing comments on selected items.
+  - **`QLineEdit` (Read-only)**: Displays the command built by `CommandBuilder`.
 
-- **Key Widgets:**
+**Interaction with Other Components**:  
+The main window integrates all components, handling user actions and updating the interface accordingly.
 
-  - **`QLineEdit` for Tree Title (`self.title_input`):**  
-    Allows users to input a unique title for the current tree.
+### 4. Loading Directory Trees
 
-  - **`QComboBox` for Loading Existing Trees (`self.load_combo`):**  
-    Lists all saved tree titles from `trees.json` for easy selection and loading.
+**Purpose**:  
+To visualize the structure of a selected directory in the `TreeView`, allowing users to navigate and interact with their filesystem.
 
-  - **`QLineEdit` for Directory Path (`self.path_input`):**  
-    Enables users to enter or display the path of the directory they wish to visualize.
+**Implementation**:
 
-  - **`QPushButton` for Browsing Directories (`browse_button`):**  
-    Opens a directory selection dialog to choose a directory visually.
+- **`TreeView` Class (`tree_view.py`)**:
+  - **`populate_tree` Method**:
+    - Recursively adds directories and files to the tree.
+    - Creates `TreeItem` instances with appropriate attributes.
+  - **Path Handling**:
+    - Stores full paths of items to build commands and manage states.
 
-  - **`QPushButton` for Loading Trees (`load_button`):**  
-    Initiates the process of loading and displaying the directory tree based on the provided path.
+**Interaction with Other Components**:  
+The `TreeView` communicates with `MainWindow` and `CommandBuilder` to update the UI and command string based on user interactions.
 
-  - **`QTreeWidget` (`self.tree_widget`):**  
-    Renders the directory structure in a tree format, allowing for expansion, collapsing, and annotation via comments.
+### 5. Adding and Editing Comments
 
-  - **`QPushButton` for Saving Trees (`self.save_button`):**  
-    Saves the current tree structure, along with its title and comments, to `trees.json`.
+**Purpose**:  
+To allow users to annotate files and directories with comments for better documentation and understanding.
 
-- **Context Menu for Comments:**
-  
-  - **`QMenu`:**  
-    Activated on right-clicking a tree item, offering the "Add/Edit Comment" option.
+**Implementation**:
 
-  - **`QInputDialog`:**  
-    Pops up to allow users to input or modify comments for selected tree items.
+- **`DetailsPanel` Class (`details_panel.py`)**:
+  - Displays the selected item's name and allows editing of its comment.
+  - **Signals and Slots**:
+    - Updates the item's `comment` attribute when the text changes.
+    - Enables or disables the panel based on item selection.
 
-**Interaction with Other Components:**  
-These widgets and layouts are interconnected to facilitate seamless user interactions, such as loading trees, adding comments, and saving data.
+**Interaction with Other Components**:  
+The `DetailsPanel` updates the `TreeItem`'s comment, which is saved and loaded by the `DataManager`.
 
-### **3. Loading Directory Trees**
+### 6. Command Builder Integration
 
-**Purpose:**  
-To visualize the structure of a selected directory in the `QTreeWidget`, enabling users to navigate and annotate their filesystem.
+**Purpose**:  
+To dynamically build the `code2prompt` command based on the user's filter and exclude selections in the tree.
 
-**Implementation:**
+**Implementation**:
 
-- **Methods Involved:**
+- **`CommandBuilder` Class (`command_builder.py`)**:
+  - **`update_command` Method**:
+    - Traverses the tree to collect paths of filtered and excluded items.
+    - Builds the command string, prioritizing excludes over filters.
+    - Updates the display in the read-only `QLineEdit`.
 
-  - **`browse_directory`:**  
-    - **Function:** Opens a dialog for users to select a directory.
-    - **Process:**  
-      - Utilizes `QFileDialog.getExistingDirectory` to let users pick a directory.
-      - Updates `self.path_input` with the selected directory path.
+- **Filter and Exclude States**:
+  - **Filter**: Include only these items.
+  - **Exclude**: Exclude these items.
+  - **States** are set via context menu options in the `TreeView`.
 
-  - **`load_tree_from_path`:**  
-    - **Function:** Loads and displays the directory structure in the `QTreeWidget`.
-    - **Process:**  
-      - Retrieves the directory path from `self.path_input`.
-      - Validates the path (ensures it exists and is a directory).
-      - Clears any existing tree in `self.tree_widget`.
-      - Creates a root `QTreeWidgetItem` representing the selected directory.
-      - Calls `populate_tree` to recursively add child items (subdirectories and files).
+**Interaction with Other Components**:  
+The `CommandBuilder` reacts to changes in the `TreeView` and updates the command accordingly.
 
-  - **`populate_tree`:**  
-    - **Function:** Recursively populates the `QTreeWidget` with the contents of the directory.
-    - **Process:**  
-      - Iterates over the contents of the given `path`.
-      - Sorts items to display directories before files, sorted alphabetically.
-      - For each directory, creates a child `QTreeWidgetItem` and recursively calls itself to populate its contents.
-      - For each file, creates a child `QTreeWidgetItem`.
-      - Handles `PermissionError` and other exceptions by adding placeholder items indicating issues.
+### 7. Saving and Loading Trees
 
-**Interaction with Other Components:**  
-This feature interacts closely with the JSON data management system. When a tree is loaded from a directory, it can be annotated and subsequently saved to JSON for future retrieval.
+**Purpose**:  
+To persistently store and retrieve annotated directory trees with their filter states and comments.
 
-### **4. Adding and Editing Comments**
+**Implementation**:
 
-**Purpose:**  
-To allow users to annotate specific files or directories with comments, enhancing the descriptive value of each tree.
+- **Saving Trees**:
+  - **Process**:
+    - User provides a title.
+    - The tree structure is converted to JSON using `build_tree_json`.
+    - The `DataManager` saves the JSON to a file named after the tree's title.
 
-**Implementation:**
+- **Loading Trees**:
+  - **Process**:
+    - User selects a saved tree from the dropdown.
+    - The `DataManager` loads the JSON data.
+    - The `TreeView` reconstructs the tree using `load_tree_from_json`.
 
-- **Context Menu Activation:**
-  
-  - **`open_context_menu`:**  
-    - **Function:** Detects right-clicks on tree items and opens a context menu.
-    - **Process:**  
-      - Identifies the item under the cursor.
-      - Creates a `QMenu` with an "Add/Edit Comment" option.
-      - Connects this option to the `edit_comment` method.
+**Interaction with Other Components**:  
+Ensures that the user's work is preserved and can be resumed or modified later.
 
-- **Editing Comments:**
-  
-  - **`edit_comment`:**  
-    - **Function:** Opens an input dialog to allow users to add or modify comments.
-    - **Process:**  
-      - Retrieves the current comment from the third column of the selected item.
-      - Uses `QInputDialog.getText` to prompt the user for a new comment, pre-filled with the existing one.
-      - If the user confirms, updates the third column with the new comment.
+### 8. Error Handling and User Prompts
 
-**Interaction with Other Components:**  
-Comments are stored within the `QTreeWidget` and are later serialized into the JSON structure when saving the tree. This ensures that annotations persist across sessions.
+**Purpose**:  
+To ensure a robust user experience by handling errors gracefully and providing informative prompts.
 
-### **5. Saving Trees to JSON**
+**Implementation**:
 
-**Purpose:**  
-To persistently store the current tree structure, including titles and comments, in `trees.json` for future retrieval and management.
+- **Unsaved Changes**:
+  - Prompts the user when they attempt to load a new tree or exit with unsaved changes.
 
-**Implementation:**
+- **Invalid Inputs**:
+  - Warns the user if an invalid directory is selected or if required fields are empty.
 
-- **`save_tree`:**  
-  - **Function:** Saves the current tree to `trees.json`.
-  - **Process:**
-    1. **Retrieve Title:**
-       - Gets the title from `self.title_input`.
-    2. **Handle Missing Title:**
-       - If no title is provided, prompts the user to confirm auto-generating one with a timestamp.
-       - Generates a title in the format `"Untitled_MM-DD-YY-HH-MM-SS"`.
-    3. **Check for Duplicate Titles:**
-       - Scans existing titles in `self.trees_data` to ensure uniqueness.
-       - If a duplicate is found, warns the user and aborts the save operation.
-    4. **Retrieve Root Item:**
-       - Gets the top-level item from `self.tree_widget`.
-       - If no tree is loaded, warns the user.
-    5. **Build JSON Representation:**
-       - Calls `build_tree_json` to convert the tree structure into a JSON-compatible dictionary.
-       - Constructs a `tree_json` dictionary with `title`, `path`, and `root`.
-    6. **Update `trees_data`:**
-       - Appends the new `tree_json` to the `trees` array in `self.trees_data`.
-    7. **Save to JSON File:**
-       - Calls `save_trees_data` to write the updated data back to `trees.json`.
-    8. **Update Load Dropdown:**
-       - Adds the new title to `self.load_combo` for future loading.
-    9. **User Notification:**
-       - Informs the user that the tree has been saved successfully.
+- **Duplicate Titles**:
+  - Checks for existing tree titles to prevent overwriting unless confirmed.
 
-- **`build_tree_json`:**  
-  - **Function:** Converts a `QTreeWidgetItem` and its children into a nested dictionary suitable for JSON serialization.
-  - **Process:**  
-    - Extracts the `name`, `type`, and `comment` from the item's columns.
-    - If the item has children (i.e., it's a directory), recursively calls itself to build the `contents` array.
-    - Returns the constructed node dictionary.
+- **Exceptions**:
+  - Catches exceptions during file operations and displays error messages.
 
-**Interaction with Other Components:**  
-Upon saving, the tree's data is serialized into JSON and stored in `trees.json`, ensuring that titles and comments are preserved. This allows users to retrieve and manage their annotated trees seamlessly.
+**Interaction with Other Components**:  
+Maintains application stability and data integrity by preventing unintended actions.
 
-### **6. Loading Existing Trees from JSON**
+### 9. Application Lifecycle Management
 
-**Purpose:**  
-To retrieve and display previously saved trees from `trees.json`, allowing users to revisit and modify their annotations.
+**Purpose**:  
+To manage the application's startup, shutdown, and state transitions smoothly.
 
-**Implementation:**
+**Implementation**:
 
-- **`load_selected_tree`:**  
-  - **Function:** Loads a selected tree from the JSON data and displays it in the `QTreeWidget`.
-  - **Process:**  
-    1. **Check Selection:**
-       - Ignores the placeholder selection (`"-- Select Existing Tree --"`).
-    2. **Retrieve Selected Title:**
-       - Gets the current text from `self.load_combo`.
-    3. **Find Tree in JSON:**
-       - Searches `self.trees_data['trees']` for a tree matching the selected title.
-    4. **Handle Missing Tree:**
-       - If no matching tree is found, warns the user.
-    5. **Set Inputs:**
-       - Updates `self.title_input` and `self.path_input` with the loaded tree's title and path.
-    6. **Clear Existing Tree:**
-       - Clears any existing tree in `self.tree_widget`.
-    7. **Populate Tree Widget:**
-       - Extracts the `root` dictionary from the loaded tree.
-       - Creates a root `QTreeWidgetItem` with the root's `name`, `type`, and `comment`.
-       - Calls `populate_tree_from_json` to recursively add child items based on the JSON structure.
-       - Expands the root item for visibility.
-    8. **Error Handling:**
-       - Catches and notifies the user of any exceptions during the loading process.
+- **Initialization**:
+  - Loads existing trees and initializes GUI components.
 
-- **`populate_tree_from_json`:**  
-  - **Function:** Recursively adds tree items to the `QTreeWidget` based on the JSON data.
-  - **Process:**  
-    - Extracts the `contents` array from the current JSON node.
-    - For each child:
-      - Retrieves `name`, `type`, and `comment`.
-      - Creates a `QTreeWidgetItem` with these details.
-      - Adds it as a child to the parent item.
-      - If the child is a directory, recursively calls itself to add its contents.
+- **Closing Events**:
+  - Overrides `closeEvent` to handle unsaved changes and confirm exit.
 
-**Interaction with Other Components:**  
-This feature enables users to effortlessly switch between different saved trees, viewing and editing their annotations as needed.
+- **Clearing Data**:
+  - Provides methods to clear the current tree data when loading new trees or closing.
 
-### **7. Error Handling and User Prompts**
-
-**Purpose:**  
-To ensure robustness and a smooth user experience by handling potential errors and guiding users through necessary confirmations.
-
-**Implementation:**
-
-- **JSON Parsing Errors:**
-  
-  - **Scenario:** `trees.json` is corrupted or improperly formatted.
-  
-  - **Handling:**  
-    - Catches `json.JSONDecodeError` during `load_trees_data`.
-    - Notifies the user via a critical message box.
-    - Initializes an empty `trees_data` structure to prevent crashes.
-
-- **Duplicate Titles:**
-  
-  - **Scenario:** User attempts to save a tree with a title that already exists.
-  
-  - **Handling:**  
-    - Checks for existing titles in `save_tree`.
-    - If a duplicate is found, warns the user and aborts the save operation.
-
-- **Missing Directory Path:**
-  
-  - **Scenario:** User tries to load a tree without specifying a directory path.
-  
-  - **Handling:**  
-    - Prompts a warning message urging the user to provide a valid path.
-
-- **Permission Errors:**
-  
-  - **Scenario:** Application lacks permissions to access certain directories.
-  
-  - **Handling:**  
-    - Adds placeholder items like `[Permission Denied]` in the tree view.
-    - Prevents the application from crashing due to unhandled exceptions.
-
-- **Auto-Generating Titles:**
-  
-  - **Scenario:** User saves a tree without providing a title.
-  
-  - **Handling:**  
-    - Prompts the user to confirm auto-generating a title.
-    - Generates a unique title using the current timestamp.
-
-- **Application Closure:**
-  
-  - **Scenario:** User attempts to close the application.
-  
-  - **Handling:**  
-    - Prompts the user to confirm quitting.
-    - Allows users to cancel the close operation if they choose.
-
-**Interaction with Other Components:**  
-Error handling mechanisms are integrated throughout various methods to ensure that users are always informed of issues and guided on how to resolve them, maintaining application stability.
-
-### **8. Application Lifecycle Management**
-
-**Purpose:**  
-To manage the behavior of the application during startup and shutdown, ensuring data integrity and user confirmation upon exit.
-
-**Implementation:**
-
-- **Initialization:**
-  
-  - **`__init__`:**  
-    - Sets up the GUI layout and initializes data structures.
-    - Loads existing trees from `trees.json` to populate the load dropdown.
-
-- **Closure:**
-  
-  - **`closeEvent`:**  
-    - Overrides the default close event.
-    - Prompts the user to confirm quitting the application.
-    - Allows users to cancel the close operation, preventing accidental exits.
-
-**Interaction with Other Components:**  
-Ensures that data is correctly loaded upon startup and that users are given a chance to confirm their intent to close the application, preventing unintended data loss.
+**Interaction with Other Components**:  
+Ensures that all components are correctly reset or preserved according to user actions.
 
 ---
 
-## **Workflow Example**
+## Workflow Example
 
-To solidify understanding, let's walk through a typical user interaction scenario, illustrating how different components and features work together.
+### 1. Starting the Application
 
-### **1. Starting the Application**
+- **Action**:  
+  - User launches the application by running `main.py`.
 
-- **Action:**  
-  - User launches the application by running `gui.py`.
-  
-- **Process:**  
-  - `Code2PromptGUI` initializes.
-  - `load_trees_data` reads `trees.json` (if it exists) and populates `self.load_combo` with existing tree titles.
+- **Process**:  
+  - The `MainWindow` initializes.
+  - The `DataManager` loads existing tree titles.
+  - The GUI is set up with all components in place.
 
-- **Result:**  
-  - GUI window appears with input fields for tree title and directory path, dropdown for existing trees, tree view, and save button.
+### 2. Loading a New Directory Tree
 
-### **2. Loading a Directory Tree**
+- **Action**:  
+  - User clicks "Browse" to select a directory or enters a path manually.
+  - The tree loads automatically upon selection.
 
-- **Action:**  
-  - User clicks the "Browse" button to select a directory or manually enters a directory path in `self.path_input`.
-  - Clicks "Load Tree" to visualize the directory structure.
+- **Process**:  
+  - `load_tree_from_path` in `MainWindow` calls `populate_tree` in `TreeView`.
+  - The directory structure is displayed in the tree view.
+  - The command builder updates to reflect the current directory.
 
-- **Process:**  
-  - `load_tree_from_path` validates the directory path.
-  - Clears any existing tree in `self.tree_widget`.
-  - Creates a root `QTreeWidgetItem` representing the selected directory.
-  - Calls `populate_tree` to recursively add subdirectories and files.
-  - Tree view displays the directory hierarchy.
+### 3. Filtering and Excluding Items
 
-- **Result:**  
-  - Users see the directory structure in the tree view, ready for annotation.
+- **Action**:  
+  - User right-clicks on a tree item and selects "Filter Item" or "Exclude Item".
 
-### **3. Adding Comments**
+- **Process**:  
+  - The item's `filter_state` is updated.
+  - `update_item_appearance` changes the item's color.
+  - `itemStateChanged` signal triggers an update to the command builder.
 
-- **Action:**  
-  - User right-clicks on a directory or file within the tree view.
-  - Selects "Add/Edit Comment" from the context menu.
-  - Enters a comment in the input dialog.
+### 4. Adding Comments
 
-- **Process:**  
-  - `open_context_menu` detects the right-click and opens the menu.
-  - `edit_comment` retrieves the current comment and prompts the user for a new one.
-  - Updates the comment in the tree view.
+- **Action**:  
+  - User selects an item in the tree.
+  - Edits the comment in the `DetailsPanel`.
 
-- **Result:**  
-  - The selected item now displays the user-provided comment in the third column.
+- **Process**:  
+  - The item's `comment` attribute is updated as the user types.
+  - Changes are reflected immediately and marked as unsaved.
 
-### **4. Saving the Tree**
+### 5. Building the Command
 
-- **Action:**  
-  - User enters a unique title in the "Tree Title" input field.
-  - Clicks "Save Tree" to persist the current tree structure.
+- **Action**:  
+  - As the user filters or excludes items, the command builder updates.
 
-- **Process:**  
-  - `save_tree` retrieves the title and validates uniqueness.
-  - If no title is provided, prompts for auto-generation.
-  - Calls `build_tree_json` to convert the tree into a JSON-compatible dictionary.
-  - Appends the new tree to `self.trees_data['trees']`.
-  - Calls `save_trees_data` to write the updated data to `trees.json`.
-  - Updates `self.load_combo` with the new title.
-  - Notifies the user of successful save.
+- **Process**:  
+  - `CommandBuilder` constructs the command based on the current tree state.
+  - Displays the command in the read-only field for the user to copy or reference.
 
-- **Result:**  
-  - The tree is saved in `trees.json` with the provided title, path, and comments.
+### 6. Saving the Tree
 
-### **5. Loading an Existing Tree**
+- **Action**:  
+  - User provides a title and clicks "Save Tree".
 
-- **Action:**  
-  - User selects a saved tree title from the "Load Existing Tree" dropdown.
+- **Process**:  
+  - The tree is serialized to JSON, including comments and filter states.
+  - The `DataManager` saves the JSON to a file.
+  - The tree title is added to the existing trees list.
 
-- **Process:**  
-  - `load_selected_tree` retrieves the corresponding tree data from `self.trees_data`.
-  - Sets the title and path input fields based on the loaded tree.
-  - Clears the current tree view.
-  - Calls `populate_tree_from_json` to reconstruct the tree structure with comments from JSON.
-  - Expands the root item for visibility.
+### 7. Loading an Existing Tree
 
-- **Result:**  
-  - The selected tree is displayed in the tree view, complete with all comments.
+- **Action**:  
+  - User selects a tree from the "Load Existing Tree" dropdown.
 
-### **6. Handling Duplicate Titles**
+- **Process**:  
+  - The `DataManager` loads the tree data.
+  - `TreeView` reconstructs the tree with previous states and comments.
+  - The command builder updates accordingly.
 
-- **Action:**  
-  - User attempts to save another tree with a title that already exists in `trees.json`.
+### 8. Closing the Application
 
-- **Process:**  
-  - `save_tree` detects the duplicate title during the save operation.
-  - Warns the user via a message box.
-  - Aborts the save process, preventing overwriting.
+- **Action**:  
+  - User closes the application window.
 
-- **Result:**  
-  - User is informed of the duplicate and can choose to provide a different title.
-
-### **7. Exiting the Application**
-
-- **Action:**  
-  - User attempts to close the application window.
-
-- **Process:**  
-  - `closeEvent` intercepts the close action.
-  - Prompts the user to confirm quitting.
-  - If the user confirms, the application closes.
-  - If the user cancels, the application remains open.
-
-- **Result:**  
-  - Controlled and intentional application closure, safeguarding against accidental exits.
+- **Process**:  
+  - If there are unsaved changes, the user is prompted to confirm exit.
+  - The application closes gracefully, ensuring data integrity.
 
 ---
 
-## **Future Enhancements**
+## Future Enhancements
 
-While the current implementation provides robust functionality, several enhancements can further elevate the user experience and expand capabilities:
+1. **Executing Commands Directly**:
+   - **Feature**: Allow users to execute the built `code2prompt` command directly from the GUI.
+   - **Implementation**:
+     - Integrate subprocess handling to run commands.
+     - Provide output logs within the application.
 
-1. **Editing Existing Trees:**
-   - **Feature:** Allow users to modify the title of an existing tree.
-   - **Implementation:**  
-     - Detect changes in `self.title_input`.
-     - Prompt users to confirm whether to overwrite the existing tree or create a new one.
-     - Update `trees.json` accordingly.
+2. **Comment Search and Filtering**:
+   - **Feature**: Enable users to search for comments or filter items based on comments.
+   - **Implementation**:
+     - Add a search bar and implement filtering logic in `TreeView`.
 
-2. **Deleting Trees:**
-   - **Feature:** Enable users to remove unwanted trees from `trees.json`.
-   - **Implementation:**  
-     - Add a "Delete Tree" button.
-     - Upon selection, remove the tree from `self.trees_data['trees']` and update `trees.json`.
+3. **Tree Comparison Tool**:
+   - **Feature**: Compare two saved trees to highlight differences.
+   - **Implementation**:
+     - Develop a comparison algorithm.
+     - Visualize differences within the tree view.
 
-3. **Exporting and Importing Trees:**
-   - **Feature:** Allow users to export individual trees as separate JSON files and import them as needed.
-   - **Implementation:**  
-     - Use `QFileDialog` to select export/import file paths.
-     - Serialize and deserialize tree data accordingly.
+4. **Customization Options**:
+   - **Feature**: Allow users to customize the appearance (e.g., colors for filter states).
+   - **Implementation**:
+     - Add settings dialogs and persist preferences.
 
-4. **Search Functionality:**
-   - **Feature:** Implement a search bar to locate specific files or directories within the tree.
-   - **Implementation:**  
-     - Add a `QLineEdit` for search input.
-     - Traverse `self.tree_widget` items to highlight matches.
-
-5. **Visual Enhancements:**
-   - **Feature:** Use icons to differentiate between files and directories visually.
-   - **Implementation:**  
-     - Assign appropriate icons to `QTreeWidgetItem` based on their type.
-
-6. **Backup Mechanism:**
-   - **Feature:** Automatically create backups of `trees.json` to prevent data loss.
-   - **Implementation:**  
-     - Before writing to `trees.json`, copy its current state to a backup file with a timestamp.
-
-7. **Integration with Code2Prompt:**
-   - **Feature:** Connect the GUI with the `Code2Prompt` backend for tasks like code analysis or documentation generation.
-   - **Implementation:**  
-     - Define methods to invoke `Code2Prompt` functionalities based on user interactions within the GUI.
-
-8. **User Preferences and Settings:**
-   - **Feature:** Allow users to customize aspects like default directory paths, display options, or comment styles.
-   - **Implementation:**  
-     - Use `QSettings` or a similar mechanism to store user preferences.
+5. **Exporting Tree Structures**:
+   - **Feature**: Export the tree structure and comments to formats like PDF or HTML.
+   - **Implementation**:
+     - Use report generation libraries to format and export data.
 
 ---
 
-## **Conclusion**
+## Conclusion
 
-The `gui.py` implementation serves as a powerful tool for visualizing and managing directory structures with added annotations. By leveraging PyQt6's robust GUI components and JSON's flexibility for data storage, the application offers a user-friendly interface for organizing and documenting file systems. This detailed breakdown elucidates how each feature is meticulously crafted to interact harmoniously, ensuring both functionality and user experience are paramount.
+**promptUI** offers a powerful and user-friendly interface for managing directory structures and integrating with the `code2prompt` tool. The modular design ensures that the application is maintainable and extensible. By allowing users to annotate, filter, and exclude items, it provides granular control over how directories are processed. The dynamic command builder bridges the gap between the GUI and command-line tools, enhancing productivity and efficiency.
 
-As we continue to develop and enhance the application, keeping this structured understanding at hand will facilitate smoother integrations, troubleshooting, and feature expansions. Should we embark on adding more complex functionalities or refining existing ones, refer back to this guide to maintain coherence and consistency within the codebase.
+As the application evolves, the focus remains on improving user experience and adding features that align with users' needs. The current architecture lays a solid foundation for future developments, ensuring that **promptUI** remains a valuable tool for project management and documentation.
 
+---
