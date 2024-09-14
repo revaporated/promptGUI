@@ -125,15 +125,28 @@ class TreeView(QTreeWidget):
         return node
 
     def open_context_menu(self, position):
-        """Open a context menu to filter or exclude items."""
+        """Open a context menu to filter, exclude, expand, or collapse items."""
         selected_item = self.itemAt(position)
         if selected_item:
             menu = QMenu()
             # Prevent filtering or excluding the root item
             if selected_item != self.topLevelItem(0):
+                # Check if the item is a directory
+                if selected_item.text(1).lower() == "directory":
+                    # Add recursive actions only for directories
+                    expand_recursively_action = menu.addAction("Expand Recursively")
+                    collapse_recursively_action = menu.addAction("Collapse Recursively")
+                    
+                    # Connect recursive actions
+                    expand_recursively_action.triggered.connect(lambda: self.expand_recursively(selected_item))
+                    collapse_recursively_action.triggered.connect(lambda: self.collapse_recursively(selected_item))
+                
+                # Existing filter/exclude actions
                 filter_action = menu.addAction("Filter Item")
                 exclude_action = menu.addAction("Exclude Item")
                 remove_action = menu.addAction("Remove Filter/Exclude")
+                
+                # Connect existing actions
                 filter_action.triggered.connect(lambda: self.set_item_state(selected_item, 'filter'))
                 exclude_action.triggered.connect(lambda: self.set_item_state(selected_item, 'exclude'))
                 remove_action.triggered.connect(lambda: self.set_item_state(selected_item, 'none'))
@@ -246,3 +259,19 @@ class TreeView(QTreeWidget):
             self.itemSelected.emit(selected_items[0])
         else:
             self.itemSelected.emit(None)
+
+    def expand_recursively(self, item):
+        """Recursively expand the given tree item and all its children."""
+        self.expandItem(item)
+        for i in range(item.childCount()):
+            child = item.child(i)
+            if child.text(1).lower() == "directory":
+                self.expand_recursively(child)
+
+    def collapse_recursively(self, item):
+        """Recursively collapse the given tree item and all its children."""
+        for i in range(item.childCount()):
+            child = item.child(i)
+            if child.text(1).lower() == "directory":
+                self.collapse_recursively(child)
+        self.collapseItem(item)
