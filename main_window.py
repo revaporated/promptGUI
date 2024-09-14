@@ -126,6 +126,32 @@ class MainWindow(QMainWindow):
 
         main_layout.addLayout(bottom_layout)
 
+    def refresh_load_combo(self):
+        """Refresh the load_combo to reflect the current list of tree titles."""
+        current_selection = self.load_combo.currentText()
+
+        # Block signals to prevent triggering events during the update
+        self.load_combo.blockSignals(True)
+
+        # Clear existing items
+        self.load_combo.clear()
+
+        # Add the default prompt
+        self.load_combo.addItem("-- Select Existing Tree --")
+
+        # Add updated tree titles from DataManager
+        self.load_combo.addItems(self.data_manager.tree_titles)
+
+        # Restore the previous selection if it still exists
+        if current_selection in self.data_manager.tree_titles:
+            index = self.load_combo.findText(current_selection)
+            self.load_combo.setCurrentIndex(index)
+        else:
+            self.load_combo.setCurrentIndex(0)  # Reset to default
+
+        # Re-enable signals
+        self.load_combo.blockSignals(False)
+
     def make_safe_filename(self, s):
         """Convert a string into a filename-safe string."""
         s = re.sub(r'[^\w\s-]', '', s)
@@ -284,17 +310,14 @@ class MainWindow(QMainWindow):
             if not success:
                 return
 
-            # Update the load_combo
-            index = self.load_combo.findText(self.current_tree_title)
-            if index >= 0:
-                self.load_combo.setItemText(index, title)
-            else:
-                self.load_combo.addItem(title)
+            # Refresh the dropdown to reflect the renamed tree
+            self.refresh_load_combo()
 
+            # Update the current tree title
             self.current_tree_title = title
         else:
             # New tree or saving with the same title
-            if title in self.tree_titles:
+            if title in self.data_manager.tree_titles:
                 proceed = QMessageBox.question(
                     self,
                     "Duplicate Title",
@@ -317,12 +340,14 @@ class MainWindow(QMainWindow):
         if not success:
             return
 
-        if title not in self.tree_titles:
-            self.tree_titles.append(title)
-            self.title_to_file[title] = self.trees_dir / f"{self.make_safe_filename(title)}.json"
-            self.load_combo.addItem(title)
+        # Refresh the dropdown to include the newly saved tree
+        self.refresh_load_combo()
 
-        self.current_tree_title = title
+        # Update the current tree title if it's a new tree
+        if not title_changed:
+            self.current_tree_title = title
+
+        # Finalize UI updates
         self.title_input.setEnabled(False)
         self.title_input.setReadOnly(True)
         self.edit_title_button.setEnabled(True)
