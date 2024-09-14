@@ -16,7 +16,7 @@ import json
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Code2Prompt GUI")
+        self.setWindowTitle("promptUI")
         self.setGeometry(100, 100, 1000, 700)
 
         # Initialize DataManager
