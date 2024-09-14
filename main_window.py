@@ -341,7 +341,10 @@ class MainWindow(QMainWindow):
 
     def on_item_selected(self, item):
         """Update details panel when an item is selected."""
-        self.details_panel.update_details(item)
+        if item is not None:
+            self.details_panel.update_details(item)
+        else:
+            self.details_panel.clear_details()
 
     def update_status_label(self):
         """Update the status label to reflect saved/unsaved changes."""

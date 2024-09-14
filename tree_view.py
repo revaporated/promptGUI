@@ -6,7 +6,7 @@ from tree_item import TreeItem
 class TreeView(QTreeWidget):
     # Signals to communicate with other components
     itemStateChanged = pyqtSignal()
-    itemSelected = pyqtSignal(TreeItem)
+    itemSelected = pyqtSignal(object)
     
     def __init__(self, parent=None):
         super().__init__(parent)
