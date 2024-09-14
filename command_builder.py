@@ -15,18 +15,15 @@ class CommandBuilder(QLineEdit):
             current_state = item.filter_state if item.filter_state != 'none' else inherited_state
             if current_state == 'exclude':
                 excludes.append(item.path)
-                for i in range(item.childCount()):
-                    child = item.child(i)
-                    collect_paths(child, 'exclude')
+                # Do not traverse children when excluded
             elif current_state == 'filter':
                 filters.append(item.path)
-                for i in range(item.childCount()):
-                    child = item.child(i)
-                    collect_paths(child, 'filter')
+                # Do not traverse children when filtered
             else:
                 for i in range(item.childCount()):
                     child = item.child(i)
                     collect_paths(child, inherited_state)
+
 
         collect_paths(root_item)
 
