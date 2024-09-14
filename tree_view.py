@@ -3,12 +3,11 @@ from PyQt6.QtCore import Qt, pyqtSignal
 from pathlib import Path
 from tree_item import TreeItem
 
-
 class TreeView(QTreeWidget):
     # Signals to communicate with other components
     itemStateChanged = pyqtSignal()
     itemSelected = pyqtSignal(TreeItem)
-
+    
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setHeaderLabels(["Name", "Type"])
@@ -28,6 +27,7 @@ class TreeView(QTreeWidget):
         self.addTopLevelItem(root_item)
         self._populate_tree_recursive(root_item, path)
         root_item.setExpanded(True)
+        self.update_item_appearance(root_item)
 
     def _populate_tree_recursive(self, parent_item, path):
         try:
@@ -65,8 +65,9 @@ class TreeView(QTreeWidget):
 
         root_item = TreeItem([name, type_])
         root_item.comment = comment
-        root_item.filter_state = filter_state
         root_item.path = path
+        if filter_state in ['filter', 'exclude']:
+            root_item.set_filter(filter_state, direct=True)
         self.addTopLevelItem(root_item)
         self._populate_tree_from_json_recursive(root_item, root_json)
         root_item.setExpanded(True)
@@ -82,8 +83,9 @@ class TreeView(QTreeWidget):
             path = child.get('path', '')
             child_item = TreeItem([name, type_])
             child_item.comment = comment
-            child_item.filter_state = filter_state
             child_item.path = path
+            if filter_state in ['filter', 'exclude']:
+                child_item.set_filter(filter_state, direct=True)
             parent_item.addChild(child_item)
             if type_.lower() == "directory":
                 self._populate_tree_from_json_recursive(child_item, child)
@@ -125,22 +127,115 @@ class TreeView(QTreeWidget):
 
     def set_item_state(self, item, state):
         """Update item state and emit signal."""
-        item.filter_state = state
+        # Check if setting filter/exclude on an item that is already inherited
+        inherited_state = self.get_inherited_state(item)
+        if state == 'filter':
+            if inherited_state in ['filter', 'exclude']:
+                QMessageBox.warning(
+                    self,
+                    "Action Not Allowed",
+                    "Cannot directly filter this item as it is already being filtered or excluded through a parent directory."
+                )
+                return
+        elif state == 'exclude':
+            if inherited_state == 'exclude':
+                QMessageBox.warning(
+                    self,
+                    "Action Not Allowed",
+                    "Cannot directly exclude this item as it is already being excluded through a parent directory."
+                )
+                return
+
+        # Update the item's filter_state and direct flags
+        if state == 'filter':
+            item.set_filter('filter', direct=True)
+        elif state == 'exclude':
+            item.set_filter('exclude', direct=True)
+        else:
+            item.set_filter('none', direct=False)
+            # Inherit state from parent after removing exclusion
+            inherited_state = self.get_inherited_state(item)
+            if inherited_state in ['filter', 'exclude']:
+                item.inherit_filter(inherited_state)
+
+        # Update children's inherited states
+        self.update_children_inheritance(item)
+
+        # Update item appearance
         self.update_item_appearance(item)
+
+        # Emit signal
         self.itemStateChanged.emit()
+
+    def get_inherited_state(self, item):
+        """Determine the inherited filter state from ancestors."""
+        parent = item.parent()
+        while parent:
+            if parent.filter_state == 'exclude':
+                return 'exclude'
+            elif parent.filter_state == 'filter':
+                return 'filter'
+            parent = parent.parent()
+        return 'none'
+
+    def update_children_inheritance(self, parent_item):
+        """Update the inherited filter/exclude states for all children."""
+        for i in range(parent_item.childCount()):
+            child = parent_item.child(i)
+            if parent_item.filter_state in ['filter', 'exclude']:
+                inherited_state = parent_item.filter_state
+                # If child does not have a direct state, inherit from parent
+                if child.filter_state == 'none':
+                    child.inherit_filter(inherited_state)
+                    self.update_item_appearance(child)
+                    # Recursively update descendants
+                    self.update_children_inheritance(child)
+            else:
+                # Parent has no filter/exclude, so remove inherited states unless child has direct state
+                if not (child.is_filter_direct or child.is_exclude_direct):
+                    if child.filter_state in ['filter', 'exclude']:
+                        child.inherit_filter('none')
+                        self.update_item_appearance(child)
+                        self.update_children_inheritance(child)
 
     def update_item_appearance(self, item):
         """Update the visual appearance of an item based on its state."""
+        # Different colors for direct and inherited states
         if item.filter_state == 'filter':
-            item.setForeground(0, Qt.GlobalColor.darkGreen)
+            if item.is_filter_direct:
+                item.setBackground(0, Qt.GlobalColor.darkGreen)
+                item.setToolTip(0, "Filtered (direct)")
+            else:
+                item.setBackground(0, Qt.GlobalColor.green)
+                item.setToolTip(0, "Filtered (inherited)")
         elif item.filter_state == 'exclude':
-            item.setForeground(0, Qt.GlobalColor.red)
+            if item.is_exclude_direct:
+                item.setBackground(0, Qt.GlobalColor.red)
+                item.setToolTip(0, "Excluded (direct)")
+            else:
+                item.setBackground(0, Qt.GlobalColor.darkRed)
+                item.setToolTip(0, "Excluded (inherited)")
         else:
+            # Reset background and set foreground to black
             item.setForeground(0, Qt.GlobalColor.black)
+            item.setBackground(0, Qt.GlobalColor.transparent)
+            item.setToolTip(0, "")
+
         # Recursively update children
         for i in range(item.childCount()):
             child = item.child(i)
-            if child.filter_state == 'none':
+            # If child has its own direct state, it already has its own appearance
+            if child.filter_state != 'none' and (child.is_filter_direct or child.is_exclude_direct):
+                self.update_item_appearance(child)
+            else:
+                # If no direct state, inherit from parent
+                if parent := item:
+                    if parent.filter_state in ['filter', 'exclude']:
+                        child.filter_state = parent.filter_state
+                        child.inherit_filter(parent.filter_state)
+                    else:
+                        child.filter_state = 'none'
+                        child.inherit_filter('none')
                 self.update_item_appearance(child)
 
     def on_item_selection_changed(self):

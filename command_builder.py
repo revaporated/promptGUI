@@ -8,22 +8,32 @@ class CommandBuilder(QLineEdit):
         self.current_directory = ""
 
     def update_command(self, root_item):
+        """
+        Update the command based on the current tree state.
+        
+        Args:
+            root_item (TreeItem): The root item of the directory tree.
+        """
         filters = []
         excludes = []
 
-        def collect_paths(item, inherited_state=None):
-            current_state = item.filter_state if item.filter_state != 'none' else inherited_state
-            if current_state == 'exclude':
+        def collect_paths(item):
+            """
+            Recursively collect paths for filters and excludes.
+            
+            Args:
+                item (TreeItem): The current tree item.
+            """
+            # If the item is directly excluded, add to excludes
+            if item.filter_state == 'exclude' and item.is_exclude_direct:
                 excludes.append(item.path)
-                # Do not traverse children when excluded
-            elif current_state == 'filter':
+            # If the item is directly filtered, add to filters
+            elif item.filter_state == 'filter' and item.is_filter_direct:
                 filters.append(item.path)
-                # Do not traverse children when filtered
-            else:
-                for i in range(item.childCount()):
-                    child = item.child(i)
-                    collect_paths(child, inherited_state)
-
+            # Traverse children to find direct excludes/filters
+            for i in range(item.childCount()):
+                child = item.child(i)
+                collect_paths(child)
 
         collect_paths(root_item)
 
@@ -36,4 +46,3 @@ class CommandBuilder(QLineEdit):
             command += f' --filter {filters_str}'
 
         self.setText(command)
-
