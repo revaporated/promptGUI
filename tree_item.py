@@ -12,7 +12,7 @@ class TreeItem(QTreeWidgetItem):
     def set_filter(self, state, direct=True):
         """
         Set the filter state of the item.
-        
+
         Args:
             state (str): 'none', 'filter', or 'exclude'
             direct (bool): True if set directly by the user, False if inherited
@@ -31,13 +31,11 @@ class TreeItem(QTreeWidgetItem):
     def inherit_filter(self, state):
         """
         Inherit filter state from parent.
-        
+
         Args:
             state (str): 'none', 'filter', or 'exclude'
         """
-        if state in ['filter', 'exclude']:
+        if not (self.is_filter_direct or self.is_exclude_direct):
             self.filter_state = state
-            self.is_filter_direct = False
-            self.is_exclude_direct = False
-        elif state == 'none':
-            self.filter_state = 'none'
+            # Since this is inherited, direct flags remain False
+

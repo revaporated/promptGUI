@@ -6,8 +6,8 @@ from tree_item import TreeItem
 class TreeView(QTreeWidget):
     # Signals to communicate with other components
     itemStateChanged = pyqtSignal()
-    itemSelected = pyqtSignal(object)
-    
+    itemSelected = pyqtSignal(object)  # Changed from pyqtSignal(TreeItem)
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setHeaderLabels(["Name", "Type"])
@@ -61,16 +61,24 @@ class TreeView(QTreeWidget):
         type_ = root_json.get('type', '').capitalize()
         comment = root_json.get('comment', '')
         filter_state = root_json.get('filter_state', 'none')
+        is_filter_direct = root_json.get('is_filter_direct', False)
+        is_exclude_direct = root_json.get('is_exclude_direct', False)
         path = root_json.get('path', '')
 
         root_item = TreeItem([name, type_])
         root_item.comment = comment
         root_item.path = path
-        if filter_state in ['filter', 'exclude']:
-            root_item.set_filter(filter_state, direct=True)
+        root_item.is_filter_direct = is_filter_direct
+        root_item.is_exclude_direct = is_exclude_direct
+        if root_item.is_filter_direct or root_item.is_exclude_direct:
+            root_item.filter_state = filter_state
+        else:
+            root_item.filter_state = 'none'
         self.addTopLevelItem(root_item)
         self._populate_tree_from_json_recursive(root_item, root_json)
         root_item.setExpanded(True)
+        # After loading, update inheritance and appearance
+        self.update_children_inheritance(root_item)
         self.update_item_appearance(root_item)
 
     def _populate_tree_from_json_recursive(self, parent_item, node_json):
@@ -80,15 +88,23 @@ class TreeView(QTreeWidget):
             type_ = child.get('type', '').capitalize()
             comment = child.get('comment', '')
             filter_state = child.get('filter_state', 'none')
+            is_filter_direct = child.get('is_filter_direct', False)
+            is_exclude_direct = child.get('is_exclude_direct', False)
             path = child.get('path', '')
             child_item = TreeItem([name, type_])
             child_item.comment = comment
             child_item.path = path
-            if filter_state in ['filter', 'exclude']:
-                child_item.set_filter(filter_state, direct=True)
+            child_item.is_filter_direct = is_filter_direct
+            child_item.is_exclude_direct = is_exclude_direct
+            if child_item.is_filter_direct or child_item.is_exclude_direct:
+                child_item.filter_state = filter_state
+            else:
+                child_item.filter_state = 'none'
             parent_item.addChild(child_item)
             if type_.lower() == "directory":
                 self._populate_tree_from_json_recursive(child_item, child)
+        # After adding all children, update inheritance and appearance
+        self.update_children_inheritance(parent_item)
 
     def build_tree_json(self, item):
         """Recursively build the JSON representation of the tree."""
@@ -97,7 +113,9 @@ class TreeView(QTreeWidget):
             "type": item.text(1).lower(),
             "comment": getattr(item, 'comment', ''),
             "filter_state": getattr(item, 'filter_state', 'none'),
-            "path": getattr(item, 'path', '')
+            "path": getattr(item, 'path', ''),
+            "is_filter_direct": getattr(item, 'is_filter_direct', False),
+            "is_exclude_direct": getattr(item, 'is_exclude_direct', False)
         }
         if item.childCount() > 0:
             node["contents"] = []
@@ -153,10 +171,12 @@ class TreeView(QTreeWidget):
             item.set_filter('exclude', direct=True)
         else:
             item.set_filter('none', direct=False)
-            # Inherit state from parent after removing exclusion
+            # Inherit state from parent after removing direct state
             inherited_state = self.get_inherited_state(item)
             if inherited_state in ['filter', 'exclude']:
                 item.inherit_filter(inherited_state)
+            else:
+                item.inherit_filter('none')
 
         # Update children's inherited states
         self.update_children_inheritance(item)
@@ -171,9 +191,9 @@ class TreeView(QTreeWidget):
         """Determine the inherited filter state from ancestors."""
         parent = item.parent()
         while parent:
-            if parent.filter_state == 'exclude':
+            if parent.is_exclude_direct:
                 return 'exclude'
-            elif parent.filter_state == 'filter':
+            elif parent.is_filter_direct:
                 return 'filter'
             parent = parent.parent()
         return 'none'
@@ -182,21 +202,21 @@ class TreeView(QTreeWidget):
         """Update the inherited filter/exclude states for all children."""
         for i in range(parent_item.childCount()):
             child = parent_item.child(i)
-            if parent_item.filter_state in ['filter', 'exclude']:
-                inherited_state = parent_item.filter_state
-                # If child does not have a direct state, inherit from parent
-                if child.filter_state == 'none':
-                    child.inherit_filter(inherited_state)
-                    self.update_item_appearance(child)
-                    # Recursively update descendants
-                    self.update_children_inheritance(child)
+            # If the child has a direct state, its children will inherit from it
+            if child.is_filter_direct or child.is_exclude_direct:
+                # Update appearance for the child
+                self.update_item_appearance(child)
+                # Recursively update descendants
+                self.update_children_inheritance(child)
             else:
-                # Parent has no filter/exclude, so remove inherited states unless child has direct state
-                if not (child.is_filter_direct or child.is_exclude_direct):
-                    if child.filter_state in ['filter', 'exclude']:
-                        child.inherit_filter('none')
-                        self.update_item_appearance(child)
-                        self.update_children_inheritance(child)
+                # Inherit from parent if no direct state
+                if parent_item.filter_state in ['filter', 'exclude']:
+                    child.inherit_filter(parent_item.filter_state)
+                else:
+                    child.inherit_filter('none')
+                # Update appearance and recurse
+                self.update_item_appearance(child)
+                self.update_children_inheritance(child)
 
     def update_item_appearance(self, item):
         """Update the visual appearance of an item based on its state."""
@@ -216,27 +236,9 @@ class TreeView(QTreeWidget):
                 item.setBackground(0, Qt.GlobalColor.darkRed)
                 item.setToolTip(0, "Excluded (inherited)")
         else:
-            # Reset background and set foreground to black
-            item.setForeground(0, Qt.GlobalColor.black)
+            # Reset background and tooltip
             item.setBackground(0, Qt.GlobalColor.transparent)
             item.setToolTip(0, "")
-
-        # Recursively update children
-        for i in range(item.childCount()):
-            child = item.child(i)
-            # If child has its own direct state, it already has its own appearance
-            if child.filter_state != 'none' and (child.is_filter_direct or child.is_exclude_direct):
-                self.update_item_appearance(child)
-            else:
-                # If no direct state, inherit from parent
-                if parent := item:
-                    if parent.filter_state in ['filter', 'exclude']:
-                        child.filter_state = parent.filter_state
-                        child.inherit_filter(parent.filter_state)
-                    else:
-                        child.filter_state = 'none'
-                        child.inherit_filter('none')
-                self.update_item_appearance(child)
 
     def on_item_selection_changed(self):
         selected_items = self.selectedItems()
